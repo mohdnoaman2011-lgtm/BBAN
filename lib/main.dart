@@ -54,15 +54,26 @@ class Bank {
   final String name;
   final String code; // رمز البنك (3 أرقام)
   final int digits; // عدد أرقام الحساب
-  const Bank({required this.name, required this.code, required this.digits});
+  final String suffix; // اللاحقة
+  const Bank({
+    required this.name,
+    required this.code,
+    required this.digits,
+    this.suffix = kDefaultSuffix,
+  });
+}
+
+class _EditBank {
+  final Bank bank;
+  const _EditBank(this.bank);
 }
 
 const kAccountLength = 10; // طول حقل رقم الحساب داخل BBAN
-const kSuffix = '0001'; // اللاحقة
+const kDefaultSuffix = '0001'; // اللاحقة الافتراضية
 
 String buildAccountPart(String account) => account.padLeft(kAccountLength, '0');
 String buildBban(Bank b, String account) =>
-    '${b.code}${buildAccountPart(account)}$kSuffix';
+    '${b.code}${buildAccountPart(account)}${b.suffix}';
 
 // ───────────────────────── Converter screen ─────────────────────────
 class ConverterScreen extends StatefulWidget {
@@ -74,7 +85,7 @@ class ConverterScreen extends StatefulWidget {
 
 class _ConverterScreenState extends State<ConverterScreen> {
   final List<Bank> _banks = [
-    const Bank(name: 'بنك الخرطوم · بنكك', code: '040', digits: 7),
+    const Bank(name: 'بنك الخرطوم · بنكك', code: '040', digits: 7, suffix: '0001'),
   ];
   late Bank _bank = _banks.first;
   final _ctrl = TextEditingController();
@@ -103,7 +114,17 @@ class _ConverterScreenState extends State<ConverterScreen> {
                 leading: const _BankIcon(size: 38),
                 title: Text(b.name, style: const TextStyle(fontWeight: FontWeight.w600)),
                 subtitle: Text('${b.digits} أرقام'),
-                trailing: b == _bank ? const Icon(Icons.check_circle, color: C.deep) : null,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (b == _bank) const Icon(Icons.check_circle, color: C.deep),
+                    IconButton(
+                      tooltip: 'تعديل',
+                      icon: const Icon(Icons.edit_outlined, color: C.muted),
+                      onPressed: () => Navigator.pop(context, _EditBank(b)),
+                    ),
+                  ],
+                ),
                 onTap: () => Navigator.pop(context, b),
               ),
             ListTile(
@@ -124,6 +145,24 @@ class _ConverterScreenState extends State<ConverterScreen> {
         _bank = picked;
         _ctrl.clear();
       });
+    } else if (picked is _EditBank) {
+      final updated = await Navigator.push<Bank>(
+        context,
+        MaterialPageRoute(builder: (_) => AddBankScreen(initial: picked.bank)),
+      );
+      if (updated != null && mounted) {
+        setState(() {
+          final i = _banks.indexOf(picked.bank);
+          final wasSelected = _bank == picked.bank;
+          _banks[i] = updated;
+          if (wasSelected) {
+            _bank = updated;
+            if (_ctrl.text.length > updated.digits) {
+              _ctrl.text = _ctrl.text.substring(0, updated.digits);
+            }
+          }
+        });
+      }
     } else if (picked == 'add') {
       final created = await Navigator.push<Bank>(
         context,
@@ -203,24 +242,29 @@ class _ConverterScreenState extends State<ConverterScreen> {
 
 // ───────────────────────── Add bank screen ─────────────────────────
 class AddBankScreen extends StatefulWidget {
-  const AddBankScreen({super.key});
+  final Bank? initial; // عند تمريره تعمل الشاشة كشاشة تعديل
+  const AddBankScreen({super.key, this.initial});
 
   @override
   State<AddBankScreen> createState() => _AddBankScreenState();
 }
 
 class _AddBankScreenState extends State<AddBankScreen> {
-  final _name = TextEditingController();
-  final _code = TextEditingController();
-  int _digits = 7;
+  late final _name = TextEditingController(text: widget.initial?.name ?? '');
+  late final _code = TextEditingController(text: widget.initial?.code ?? '');
+  late final _suffix = TextEditingController(text: widget.initial?.suffix ?? kDefaultSuffix);
+  late int _digits = widget.initial?.digits ?? 7;
+  bool get _isEdit => widget.initial != null;
   static const _presets = [7, 10, 13, 16];
 
-  bool get _valid => _name.text.trim().isNotEmpty && _code.text.length == 3;
+  bool get _valid =>
+      _name.text.trim().isNotEmpty && _code.text.length == 3 && _suffix.text.isNotEmpty;
 
   @override
   void dispose() {
     _name.dispose();
     _code.dispose();
+    _suffix.dispose();
     super.dispose();
   }
 
@@ -228,7 +272,7 @@ class _AddBankScreenState extends State<AddBankScreen> {
 
   void _save() => Navigator.pop(
         context,
-        Bank(name: _name.text.trim(), code: _code.text, digits: _digits),
+        Bank(name: _name.text.trim(), code: _code.text, digits: _digits, suffix: _suffix.text),
       );
 
   @override
@@ -244,7 +288,7 @@ class _AddBankScreenState extends State<AddBankScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const _TopBar(title: 'إضافة بنك جديد', canPop: true),
+                  _TopBar(title: _isEdit ? 'تعديل بنك' : 'إضافة بنك جديد', canPop: true),
                   const SizedBox(height: 14),
                   const Text(
                     'أدخل بيانات البنك ليظهر التنبيه الصحيح للمستخدم.',
@@ -263,18 +307,51 @@ class _AddBankScreenState extends State<AddBankScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  const _Label('رمز البنك (3 أرقام)'),
-                  _InputShell(
-                    child: TextField(
-                      controller: _code,
-                      onChanged: (_) => setState(() {}),
-                      keyboardType: TextInputType.number,
-                      textDirection: TextDirection.ltr,
-                      textAlign: TextAlign.right,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(3)],
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, letterSpacing: 3),
-                      decoration: const InputDecoration(border: InputBorder.none, hintText: '040', counterText: ''),
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _Label('رمز البنك (3 أرقام)'),
+                            _InputShell(
+                              child: TextField(
+                                controller: _code,
+                                onChanged: (_) => setState(() {}),
+                                keyboardType: TextInputType.number,
+                                textDirection: TextDirection.ltr,
+                                textAlign: TextAlign.right,
+                                inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(3)],
+                                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, letterSpacing: 3),
+                                decoration: const InputDecoration(border: InputBorder.none, hintText: '040', counterText: ''),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _Label('رقم اللاحقة'),
+                            _InputShell(
+                              child: TextField(
+                                controller: _suffix,
+                                onChanged: (_) => setState(() {}),
+                                keyboardType: TextInputType.number,
+                                textDirection: TextDirection.ltr,
+                                textAlign: TextAlign.right,
+                                inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
+                                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, letterSpacing: 3),
+                                decoration: const InputDecoration(border: InputBorder.none, hintText: '0001', counterText: ''),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 18),
                   const _Label('عدد أرقام الحساب'),
@@ -344,7 +421,7 @@ class _AddBankScreenState extends State<AddBankScreen> {
                     ),
                   ),
                   const Spacer(),
-                  _PrimaryButton(label: 'حفظ البنك', onPressed: _valid ? _save : null),
+                  _PrimaryButton(label: _isEdit ? 'حفظ التعديلات' : 'حفظ البنك', onPressed: _valid ? _save : null),
                   const SizedBox(height: 12),
                   _OutlineButton(label: 'إلغاء', onPressed: () => Navigator.pop(context)),
                 ],
@@ -387,20 +464,22 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
         children: [
-          Material(
-            color: C.surface,
-            shape: const CircleBorder(side: BorderSide(color: C.line)),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: canPop ? () => Navigator.maybePop(context) : null,
-              child: const SizedBox(
-                width: 44,
-                height: 44,
-                child: Icon(Icons.arrow_forward_rounded, size: 20),
+          if (canPop) ...[
+            Material(
+              color: C.surface,
+              shape: const CircleBorder(side: BorderSide(color: C.line)),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () => Navigator.maybePop(context),
+                child: const SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Icon(Icons.arrow_forward_rounded, size: 20),
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
+            const SizedBox(width: 12),
+          ],
           Expanded(
             child: Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
           ),
@@ -551,7 +630,7 @@ class _BbanCard extends StatelessWidget {
                 children: [
                   _Segment(value: bank.code, label: 'رمز البنك', accent: true),
                   _Segment(value: ready ? buildAccountPart(account) : '••••••••••', label: 'رقم الحساب'),
-                  _Segment(value: kSuffix, label: 'اللاحقة', accent: true),
+                  _Segment(value: bank.suffix, label: 'اللاحقة', accent: true),
                 ],
               ),
             ),
