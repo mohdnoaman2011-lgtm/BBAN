@@ -52,7 +52,7 @@ class BbanApp extends StatelessWidget {
 // ───────────────────────── Model ─────────────────────────
 class Bank {
   final String name;
-  final String code; // رمز البنك (3 أرقام)
+  final String code; // رمز البنك (أي عدد من الأرقام)
   final int digits; // عدد أرقام الحساب
   final String suffix; // اللاحقة
   const Bank({
@@ -68,6 +68,7 @@ class _EditBank {
   const _EditBank(this.bank);
 }
 
+const kMaxCodeLength = 10; // أقصى طول لرمز البنك
 const kAccountLength = 10; // أقصى عدد أرقام مسموح لرقم الحساب
 const kDefaultSuffix = '0001'; // اللاحقة الافتراضية
 
@@ -258,7 +259,7 @@ class _AddBankScreenState extends State<AddBankScreen> {
   static const _presets = [7, 10, 13, 16];
 
   bool get _valid =>
-      _name.text.trim().isNotEmpty && _code.text.length == 3 && _suffix.text.isNotEmpty;
+      _name.text.trim().isNotEmpty && _code.text.isNotEmpty && _suffix.text.isNotEmpty;
 
   @override
   void dispose() {
@@ -314,7 +315,7 @@ class _AddBankScreenState extends State<AddBankScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const _Label('رمز البنك (3 أرقام)'),
+                            const _Label('رمز البنك'),
                             _InputShell(
                               child: TextField(
                                 controller: _code,
@@ -322,7 +323,7 @@ class _AddBankScreenState extends State<AddBankScreen> {
                                 keyboardType: TextInputType.number,
                                 textDirection: TextDirection.ltr,
                                 textAlign: TextAlign.right,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(3)],
+                                inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(kMaxCodeLength)],
                                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, letterSpacing: 3),
                                 decoration: const InputDecoration(border: InputBorder.none, hintText: '040', counterText: ''),
                               ),
