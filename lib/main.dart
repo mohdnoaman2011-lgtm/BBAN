@@ -68,10 +68,10 @@ class _EditBank {
   const _EditBank(this.bank);
 }
 
-const kAccountLength = 10; // طول حقل رقم الحساب داخل BBAN
+const kAccountLength = 10; // أقصى عدد أرقام مسموح لرقم الحساب
 const kDefaultSuffix = '0001'; // اللاحقة الافتراضية
 
-String buildAccountPart(String account) => account.padLeft(kAccountLength, '0');
+String buildAccountPart(String account) => account; // بدون حشو بالأصفار
 String buildBban(Bank b, String account) =>
     '${b.code}${buildAccountPart(account)}${b.suffix}';
 
@@ -629,7 +629,7 @@ class _BbanCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _Segment(value: bank.code, label: 'رمز البنك', accent: true),
-                  _Segment(value: ready ? buildAccountPart(account) : '••••••••••', label: 'رقم الحساب'),
+                  _Segment(value: ready ? buildAccountPart(account) : '•' * bank.digits, label: 'رقم الحساب'),
                   _Segment(value: bank.suffix, label: 'اللاحقة', accent: true),
                 ],
               ),
